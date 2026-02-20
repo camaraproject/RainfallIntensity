@@ -17,7 +17,9 @@ Sandbox API Repository to describe, develop, document, and test the RainfallInte
 
 * Service API(s) “RainfallIntensity” (see APIBacklog.md) 
 * The API(s) provide(s) the API consumer with the ability to:  
-  * §Short API scope description§ !! Add here a scope description according to the API proposal
+  * Obtain the power measurements for the communication links inside a geographical area for a specific time period. The data  includes the time of measurement, the transmit and received power, and the link ID (which identifies each link uniquely).
+  * Obtain the metadata of the communication links within a geographical area. The metadata includes the link ID, time of update, signal frequecny, signal polarization (horizontal or vertical), and location (latetude and longitude) of the transmitter and the receiver.
+  * Obtain the  rainfall data associated with communciation links inside a geographical are for a specific time. The rainfall data include the estimation of rainfall, time stamp, and link ID. 
 * Describe, develop, document, and test the API(s)
 * Started: January 2026
 <!-- * Incubating stage since: {{incubation date}} --> 
