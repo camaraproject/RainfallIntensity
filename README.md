@@ -37,7 +37,7 @@ The repository has no (pre)releases yet, work in progress is within the main bra
 
 * Meetings are held virtually <!-- for new, independent Sandbox API repositories request a meeting link from the LF admin team or replace the information with the existing meeting information of the Sub Project -->
 
-  * Schedule: Bi-weekly meeting 11-12 CET
+  * Schedule: Bi-weekly meeting on Mondays 11-12 CET
   * [Registration / Join]( https://zoom-lfx.platform.linuxfoundation.org/meeting/94070606795?password=ad27d15f-a24a-42b3-86ac-3f0993954bcd) 
   * Minutes: Access [meeting minutes](https://lf-camaraproject.atlassian.net/wiki/x/AgDHH)
 * Mailing List
