@@ -1,0 +1,12 @@
+# Rainfall Intensity API User Story — Rainfall Estimates for Urban Flood Warning
+
+| **Item** | **Details** |
+| ---- | ------- |
+| ***Summary*** | As an enterprise application developer at a municipal emergency management agency, I want to subscribe to real-time rainfall intensity estimates for a geographical area, so that I can trigger automated flood warnings and coordinate emergency response before critical thresholds are exceeded. |
+| ***Roles, Actors and Scope*** | **Roles:** Customer:Developer <br> **Actors:** Application service providers, municipal emergency management agencies, hyperscalers, application developers. <br> **Scope:** Order To Activate (OTA) — Subscribe to rainfall intensity estimates for a defined geographical area. |
+| ***Pre-conditions*** | 1. The API consumer has been onboarded to the CSP's API platform. <br> 2. The API consumer has requested and received an access token with the required scope for the Rainfall Intensity API. |
+| ***Begins when*** | The API consumer makes a POST request to subscribe to rainfall intensity estimates for a geographical area, providing the area (RFC 7946 Polygon) and a callback URL (sink) for receiving notifications. |
+| ***Ends when*** | The CSP delivers rainfall intensity notifications to the consumer's callback URL at a fixed cadence. Each notification contains the rainfall estimate (mm/h), accuracy (90% confidence window, mm/h), timestamp, and area ID. The subscription ends when the consumer explicitly unsubscribes or the subscription expires. |
+| ***Post-conditions*** | The API consumer has a continuous stream of rainfall intensity estimates for the subscribed area, enabling automated flood risk assessment, threshold-based alert generation, and coordination of emergency response actions. |
+| ***Exceptions*** | - **Unauthorized:** Invalid or expired access token. <br> - **Invalid input:** Malformed polygon, unsupported area format, or missing required parameters. <br> - **Area not supported:** No active microwave links exist within the requested geographical area to derive rainfall estimates. <br> - **Insufficient link density:** Too few links in the area for a reliable rainfall estimate. <br> - **Callback unreachable:** The provided sink URL is not reachable by the CSP notification service. <br> - **Subscription limit exceeded:** The consumer has reached the maximum number of concurrent subscriptions. |
+
