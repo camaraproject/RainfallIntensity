@@ -2,7 +2,7 @@
 
 | **Item** | **Details** |
 | ---- | ------- |
-| ***Summary*** | As an enterprise application developer at a municipal emergency management agency, I want to subscribe to real-time rainfall intensity estimates for a geographical area, so that I can trigger automated flood warnings and coordinate emergency response before critical thresholds are exceeded. |
+| ***Summary*** | As an enterprise application developer at a municipal emergency management agency, I want to subscribe to real-time rainfall intensity estimates for a geographical area, so that I can trigger automated flood or drought warnings and coordinate emergency response before critical thresholds are exceeded. |
 | ***Roles, Actors and Scope*** | **Roles:** Customer:Developer <br> **Actors:** Application service providers, municipal emergency management agencies, hyperscalers, application developers. <br> **Scope:** Order To Activate (OTA) — Subscribe to rainfall intensity estimates for a defined geographical area. |
 | ***Pre-conditions*** | 1. The API consumer has been onboarded to the CSP's API platform. <br> 2. The API consumer has requested and received an access token with the required scope for the Rainfall Intensity API. |
 | ***Begins when*** | The API consumer makes a POST request to subscribe to rainfall intensity estimates for a geographical area, providing the area (RFC 7946 Polygon) and a callback URL (sink) for receiving notifications. |
