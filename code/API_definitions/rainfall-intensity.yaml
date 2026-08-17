@@ -43,6 +43,9 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0.html
   x-camara-commonalities: 0.7.0
 
+externalDocs:
+  url: https://github.com/camaraproject/RainfallIntensity
+
 servers:
   - url: "{apiRoot}/rainfall-intensity/vwip"
     variables:
@@ -389,6 +392,7 @@ components:
   securitySchemes:
     openId:
       type: openIdConnect
+      description: OpenID Connect authentication using operator's token endpoint (OAuth 2.0 Client Credentials)
       openIdConnectUrl: https://example.com/.well-known/openid-configuration
 
   parameters:
@@ -514,9 +518,7 @@ components:
         lastUpdated:
           type: string
           format: date-time
-          description: |
-            Timestamp of the last metadata update for this link (RFC 3339, UTC).
-            
+          description: Timestamp of the last metadata update for this link (RFC 3339, UTC).
 
     GeoCoordinate:
       type: object
@@ -571,6 +573,7 @@ components:
             remains active until explicitly deleted.
 
     PowerMeasurementSubscription:
+      description: A power measurement subscription including server-assigned fields.
       allOf:
         - $ref: '#/components/schemas/PowerMeasurementSubscriptionRequest'
         - type: object
@@ -676,6 +679,7 @@ components:
             remains active until explicitly deleted.
 
     RainfallSubscription:
+      description: A rainfall estimate subscription including server-assigned fields.
       allOf:
         - $ref: '#/components/schemas/RainfallSubscriptionRequest'
         - type: object
