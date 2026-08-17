@@ -1,0 +1,937 @@
+openapi: 3.0.3
+info:
+  title: Rainfall Intensity
+  description: |
+    The Rainfall Intensity API exposes link attenuation and network-derived rainfall estimation data to API consumers.
+    It leverages power measurements from commercial microwave links (CML) within a geographical
+    area to estimate rainfall intensity. Three capabilities are provided:
+
+    - **Link metadata** — retrieve metadata of microwave links in a geographical area (request/response)
+    - **Power measurements** — subscribe to real-time TX/RX power measurements per link (subscribe-notify)
+    - **Rainfall estimates** — subscribe to rainfall intensity estimates per GeoHash cell (subscribe-notify)
+
+    ## Authorization and authentication
+
+    The "Rainfall Intensity" API is accessible using a 2-legged access token. No end-user
+    consent is required. The access token must be obtained from the operator's token endpoint
+    using the OAuth 2.0 Client Credentials grant (RFC 6749).
+
+    The following scopes are defined:
+    - `rainfall-intensity:links:read` — retrieve link metadata
+    - `rainfall-intensity:power-measurement-subscriptions:write` — create/delete power measurement subscriptions
+    - `rainfall-intensity:power-measurement-subscriptions:read` — list/retrieve power measurement subscriptions
+    - `rainfall-intensity:rainfall-subscriptions:write` — create/delete rainfall subscriptions
+    - `rainfall-intensity:rainfall-subscriptions:read` — list/retrieve rainfall subscriptions
+
+    ## Additional CAMARA error responses
+
+    The following error responses apply across all operations in addition to operation-specific errors:
+
+    - `401 UNAUTHENTICATED` — missing or invalid access token
+    - `403 PERMISSION_DENIED` — valid token but insufficient scope
+    - `429 TOO_MANY_REQUESTS` — rate limit exceeded
+    - `500 INTERNAL` — unexpected server error
+
+    ## Request body strictness
+
+    The server rejects requests containing unknown JSON properties at any nesting level
+    with `400 INVALID_ARGUMENT`.
+
+  version: wip
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  x-camara-commonalities: 0.7.0
+
+servers:
+  - url: "{apiRoot}/rainfall-intensity/vwip"
+    variables:
+      apiRoot:
+        default: https://example.com
+        description: API root as defined by the operator
+
+tags:
+  - name: Link Metadata
+    description: Retrieve metadata of microwave links in a geographical area
+  - name: Power Measurement Subscriptions
+    description: Subscribe to real-time TX/RX power measurements per link
+  - name: Rainfall Subscriptions
+    description: Subscribe to rainfall intensity estimates per GeoHash cell
+
+paths:
+
+  /links:
+    post:
+      operationId: retrieveLinks
+      summary: Retrieve microwave link metadata for a geographical area
+      description: |
+        Returns metadata for all active microwave links whose transmitter or receiver
+        is located within the specified geographical area (RFC 7946 Polygon).
+
+        Each link entry includes link ID, signal frequency, signal polarization,
+        and transmitter/receiver coordinates.
+      tags:
+        - Link Metadata
+      security:
+        - openId:
+            - rainfall-intensity:links:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMetadataRequest'
+      responses:
+        '200':
+          description: List of microwave links in the requested area
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMetadataResponse'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '422':
+          $ref: '#/components/responses/Generic422'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+  /power-measurement-subscriptions:
+    post:
+      operationId: createPowerMeasurementSubscription
+      summary: Create a power measurement subscription
+      description: |
+        Subscribe to real-time TX/RX power measurements for microwave links within
+        a geographical area. Notifications are delivered to the specified callback URL.
+
+        Each notification contains measurements for all active links in the subscribed area.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:write
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PowerMeasurementSubscriptionRequest'
+      responses:
+        '201':
+          description: Subscription created
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PowerMeasurementSubscription'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '409':
+          $ref: '#/components/responses/Generic409'
+        '422':
+          $ref: '#/components/responses/Generic422'
+        '429':
+          $ref: '#/components/responses/Generic429'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+    get:
+      operationId: listPowerMeasurementSubscriptions
+      summary: List power measurement subscriptions
+      description: Returns all active power measurement subscriptions for the authenticated consumer.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      responses:
+        '200':
+          description: List of subscriptions (may be empty)
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: '#/components/schemas/PowerMeasurementSubscription'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+  /power-measurement-subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/x-correlator'
+
+    get:
+      operationId: getPowerMeasurementSubscription
+      summary: Retrieve a power measurement subscription
+      description: Returns the details of a specific power measurement subscription.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:read
+      responses:
+        '200':
+          description: Subscription details
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PowerMeasurementSubscription'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '404':
+          $ref: '#/components/responses/Generic404'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+    delete:
+      operationId: deletePowerMeasurementSubscription
+      summary: Delete a power measurement subscription
+      description: Cancels a power measurement subscription. Notifications stop immediately.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:write
+      responses:
+        '204':
+          description: Subscription deleted
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '404':
+          $ref: '#/components/responses/Generic404'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+  /rainfall-subscriptions:
+    post:
+      operationId: createRainfallSubscription
+      summary: Create a rainfall estimate subscription
+      description: |
+        Subscribe to rainfall intensity estimates for a geographical area.
+        Notifications are delivered to the specified callback URL.
+
+        Each notification contains rainfall estimates per GeoHash cell covering the subscribed
+        area, along with a 90% confidence window (mm/h) and timestamp. The GeoHash precision
+        level is determined by the network based on link density in the area.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:write
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RainfallSubscriptionRequest'
+      responses:
+        '201':
+          description: Subscription created
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainfallSubscription'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '409':
+          $ref: '#/components/responses/Generic409'
+        '422':
+          $ref: '#/components/responses/Generic422'
+        '429':
+          $ref: '#/components/responses/Generic429'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+    get:
+      operationId: listRainfallSubscriptions
+      summary: List rainfall subscriptions
+      description: Returns all active rainfall subscriptions for the authenticated consumer.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      responses:
+        '200':
+          description: List of subscriptions (may be empty)
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: '#/components/schemas/RainfallSubscription'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+  /rainfall-subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/x-correlator'
+
+    get:
+      operationId: getRainfallSubscription
+      summary: Retrieve a rainfall subscription
+      description: Returns the details of a specific rainfall subscription.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:read
+      responses:
+        '200':
+          description: Subscription details
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainfallSubscription'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '404':
+          $ref: '#/components/responses/Generic404'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+    delete:
+      operationId: deleteRainfallSubscription
+      summary: Delete a rainfall subscription
+      description: Cancels a rainfall subscription. Notifications stop immediately.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:write
+      responses:
+        '204':
+          description: Subscription deleted
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+        '400':
+          $ref: '#/components/responses/Generic400'
+        '401':
+          $ref: '#/components/responses/Generic401'
+        '403':
+          $ref: '#/components/responses/Generic403'
+        '404':
+          $ref: '#/components/responses/Generic404'
+        '500':
+          $ref: '#/components/responses/Generic500'
+
+components:
+
+  securitySchemes:
+    openId:
+      type: openIdConnect
+      openIdConnectUrl: https://example.com/.well-known/openid-configuration
+
+  parameters:
+    subscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      description: Unique identifier of the subscription, as returned on creation.
+      schema:
+        type: string
+        maxLength: 64
+        description: Unique subscription identifier
+
+    x-correlator:
+      name: x-correlator
+      in: header
+      required: false
+      description: |
+        Correlation ID for end-to-end tracing. If provided by the consumer, the server
+        echoes it in the response. Recommended format: UUID.
+      schema:
+        type: string
+        maxLength: 256
+        pattern: '^[a-zA-Z0-9\-_:;.\/<>{}]{0,256}$'
+
+  headers:
+    x-correlator:
+      description: |
+        Correlation ID echoed from the request. If the consumer sent x-correlator,
+        the server MUST return the same value.
+      schema:
+        type: string
+        maxLength: 256
+        pattern: '^[a-zA-Z0-9\-_:;.\/<>{}]{0,256}$'
+
+  schemas:
+
+    # --- Shared geographic types ---
+
+    Polygon:
+      type: object
+      description: |
+        A geographical area defined as a GeoJSON Polygon (RFC 7946 structure).
+        Only a single outer boundary ring is supported — holes are not allowed.
+        The ring must be closed (first and last coordinate identical).
+      required:
+        - type
+        - coordinates
+      properties:
+        type:
+          type: string
+          enum: [Polygon]
+          description: GeoJSON geometry type — must be "Polygon"
+        coordinates:
+          type: array
+          description: |
+            Array containing exactly one linear ring defining the outer boundary.
+            Each element is [longitude, latitude] in decimal degrees (WGS84).
+            The ring must be closed (first and last coordinate identical).
+            Holes are not supported.
+          minItems: 1
+          maxItems: 1
+          items:
+            type: array
+            minItems: 4
+            maxItems: 16
+            items:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items:
+                type: number
+                format: double
+
+    # --- Link metadata ---
+
+    LinkMetadataRequest:
+      type: object
+      description: Request body for retrieving link metadata. If area is omitted, all available link metadata is returned.
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    LinkMetadataResponse:
+      type: object
+      description: List of microwave links in the requested area.
+      required:
+        - links
+      properties:
+        links:
+          type: array
+          maxItems: 100000
+          description: Microwave links whose transmitter or receiver is within the requested area.
+          items:
+            $ref: '#/components/schemas/LinkMetadata'
+
+    LinkMetadata:
+      type: object
+      description: Metadata for a single microwave link.
+      required:
+        - linkId
+        - transmitterLocation
+        - receiverLocation
+        - lastUpdated
+      properties:
+        linkId:
+          type: string
+          maxLength: 64
+          description: Unique identifier for the microwave link (transmitter-receiver pair).
+        signalFrequencyKHz:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Signal frequency in kHz (e.g. 23000000 for 23 GHz).
+        signalPolarization:
+          type: string
+          enum: [H, V]
+          description: Signal polarization — H (horizontal) or V (vertical).
+        transmitterLocation:
+          $ref: '#/components/schemas/GeoCoordinate'
+        receiverLocation:
+          $ref: '#/components/schemas/GeoCoordinate'
+        lastUpdated:
+          type: string
+          format: date-time
+          description: |
+            Timestamp of the last metadata update for this link (RFC 3339, UTC).
+            
+
+    GeoCoordinate:
+      type: object
+      description: A geographic coordinate (WGS84).
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: Latitude in decimal degrees (WGS84).
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          description: Longitude in decimal degrees (WGS84).
+
+    # --- Power measurement subscription ---
+
+    PowerMeasurementSubscriptionRequest:
+      type: object
+      description: Request body for creating a power measurement subscription.
+      required:
+        - sink
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            Callback URL (sink) where the server delivers power measurement notifications.
+            Must be reachable by the server. HTTPS required.
+        sinkCredential:
+          $ref: '#/components/schemas/SinkCredential'
+        startsAt:
+          type: string
+          format: date-time
+          description: |
+            Optional subscription start time (RFC 3339, UTC). If omitted, the subscription
+            starts immediately upon creation.
+        expiresAt:
+          type: string
+          format: date-time
+          description: |
+            Optional subscription expiry time (RFC 3339, UTC). If omitted, the subscription
+            remains active until explicitly deleted.
+
+    PowerMeasurementSubscription:
+      allOf:
+        - $ref: '#/components/schemas/PowerMeasurementSubscriptionRequest'
+        - type: object
+          required:
+            - subscriptionId
+            - status
+            - createdAt
+          properties:
+            subscriptionId:
+              type: string
+              maxLength: 64
+              description: Server-assigned unique identifier for this subscription.
+            status:
+              $ref: '#/components/schemas/SubscriptionStatus'
+            createdAt:
+              type: string
+              format: date-time
+              description: Timestamp when the subscription was created (RFC 3339, UTC).
+
+    # --- Power measurement notification payload ---
+
+    PowerMeasurementNotification:
+      type: object
+      description: |
+        Notification payload delivered to the consumer's sink URL.
+        Contains TX/RX power measurements for all active links in the subscribed area.
+      required:
+        - subscriptionId
+        - timestamp
+        - measurements
+      properties:
+        subscriptionId:
+          type: string
+          maxLength: 64
+          description: Identifier of the subscription that triggered this notification.
+        timestamp:
+          type: string
+          format: date-time
+          description: Measurement collection timestamp (RFC 3339, UTC).
+        measurements:
+          type: array
+          maxItems: 10000
+          description: Power measurements for each active link in the subscribed area.
+          items:
+            $ref: '#/components/schemas/LinkPowerMeasurement'
+
+    LinkPowerMeasurement:
+      type: object
+      description: TX/RX power measurement for a single microwave link.
+      required:
+        - linkId
+        - timestamp
+      properties:
+        linkId:
+          type: string
+          maxLength: 64
+          description: Unique identifier of the microwave link.
+        transmitPowerdBm:
+          type: number
+          format: double
+          nullable: true
+          description: Actual transmit power in dBm. Null if not available.
+        receivedPowerdBm:
+          type: number
+          format: double
+          nullable: true
+          description: Actual received power in dBm. Null if not available.
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of this individual measurement (RFC 3339, UTC).
+
+    # --- Rainfall subscription ---
+
+    RainfallSubscriptionRequest:
+      type: object
+      description: Request body for creating a rainfall estimate subscription. If area is omitted, all links available to the requester are included.
+      required:
+        - sink
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            Callback URL (sink) where the server delivers rainfall notifications.
+            Must be reachable by the server. HTTPS required.
+        sinkCredential:
+          $ref: '#/components/schemas/SinkCredential'
+        startsAt:
+          type: string
+          format: date-time
+          description: |
+            Optional subscription start time (RFC 3339, UTC). If omitted, the subscription
+            starts immediately upon creation.
+        expiresAt:
+          type: string
+          format: date-time
+          description: |
+            Optional subscription expiry time (RFC 3339, UTC). If omitted, the subscription
+            remains active until explicitly deleted.
+
+    RainfallSubscription:
+      allOf:
+        - $ref: '#/components/schemas/RainfallSubscriptionRequest'
+        - type: object
+          required:
+            - subscriptionId
+            - status
+            - createdAt
+          properties:
+            subscriptionId:
+              type: string
+              maxLength: 64
+              description: Server-assigned unique identifier for this subscription.
+            status:
+              $ref: '#/components/schemas/SubscriptionStatus'
+            createdAt:
+              type: string
+              format: date-time
+              description: Timestamp when the subscription was created (RFC 3339, UTC).
+
+    # --- Rainfall notification payload ---
+
+    RainfallNotification:
+      type: object
+      description: |
+        Notification payload delivered to the consumer's sink URL.
+        Contains rainfall intensity estimates per GeoHash cell covering the subscribed area.
+      required:
+        - subscriptionId
+        - cells
+      properties:
+        subscriptionId:
+          type: string
+          maxLength: 64
+          description: Identifier of the subscription that triggered this notification.
+        cells:
+          type: array
+          maxItems: 10000
+          description: Rainfall estimates per GeoHash cell.
+          items:
+            $ref: '#/components/schemas/RainfallCell'
+
+    RainfallCell:
+      type: object
+      description: Rainfall intensity estimate for a single GeoHash cell.
+      required:
+        - geohash
+        - rainfallMmPerHour
+      properties:
+        geohash:
+          type: string
+          minLength: 5
+          maxLength: 6
+          description: |
+            GeoHash string identifying the cell at the requested precision level
+            (5 or 6 characters). Example: "u33db" (level 5), "u33db2" (level 6).
+        rainfallMmPerHour:
+          type: number
+          format: double
+          minimum: 0
+          description: Estimated rainfall intensity in mm/h for this cell.
+        accuracyMmPerHour:
+          type: number
+          format: double
+          minimum: 0
+          description: |
+            90% confidence window in mm/h. The true rainfall intensity lies within
+            +/- this value of the estimate with 90% probability.
+
+    # --- Shared subscription types ---
+
+    SubscriptionStatus:
+      type: string
+      enum: [ACTIVE, EXPIRED, DELETED]
+      description: |
+        Current status of the subscription.
+        - ACTIVE: subscription is running and notifications are being delivered
+        - EXPIRED: subscription reached its expiresAt time
+        - DELETED: subscription was explicitly cancelled
+
+    SinkCredential:
+      type: object
+      description: |
+        Optional credential used by the server to authenticate when delivering
+        notifications to the sink URL.
+      required:
+        - credentialType
+      properties:
+        credentialType:
+          type: string
+          enum: [ACCESSTOKEN]
+          description: Credential type — currently only ACCESSTOKEN is supported.
+        accessToken:
+          type: string
+          maxLength: 4096
+          description: Bearer token included in the Authorization header of notification requests.
+        accessTokenExpiresUtc:
+          type: string
+          format: date-time
+          description: |
+            Absolute UTC timestamp at which the access token expires (RFC 3339).
+            Token expiration should occur after the subscription expiresAt to ensure
+            uninterrupted notification delivery.
+        accessTokenType:
+          type: string
+          enum: [bearer]
+          description: Token type — must be "bearer".
+
+    # --- Error schema ---
+
+    ErrorResponse:
+      type: object
+      description: Standard CAMARA error response.
+      required:
+        - status
+        - code
+        - message
+      properties:
+        status:
+          type: integer
+          format: int32
+          minimum: 400
+          maximum: 599
+          description: HTTP status code.
+        code:
+          type: string
+          maxLength: 64
+          description: Machine-readable error code in SCREAMING_SNAKE_CASE.
+        message:
+          type: string
+          maxLength: 512
+          description: Human-readable error description in English.
+
+  responses:
+
+    Generic400:
+      description: Bad request — invalid input or unknown JSON property
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            code: INVALID_ARGUMENT
+            message: "Request body contains an unknown property: 'foo'"
+
+    Generic401:
+      description: Unauthenticated — missing or invalid access token
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            code: UNAUTHENTICATED
+            message: "Missing or invalid access token"
+
+    Generic403:
+      description: Permission denied — insufficient scope
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 403
+            code: PERMISSION_DENIED
+            message: "Insufficient scope for this operation"
+
+    Generic404:
+      description: Not found — subscription does not exist
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 404
+            code: NOT_FOUND
+            message: "Subscription not found"
+
+    Generic409:
+      description: Conflict — duplicate subscription
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 409
+            code: CONFLICT
+            message: "An active subscription already exists for this area and sink"
+
+    Generic422:
+      description: Unprocessable — area not supported or insufficient link density
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            areaNotSupported:
+              value:
+                status: 422
+                code: RAINFALL_INTENSITY.AREA_NOT_SUPPORTED
+                message: "No active microwave links exist within the requested area"
+            insufficientLinkDensity:
+              value:
+                status: 422
+                code: RAINFALL_INTENSITY.INSUFFICIENT_LINK_DENSITY
+                message: "Too few links in the area for a reliable rainfall estimate"
+
+    Generic429:
+      description: Too many requests — rate limit or subscription limit exceeded
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            tooManyRequests:
+              value:
+                status: 429
+                code: TOO_MANY_REQUESTS
+                message: "Rate limit exceeded"
+            quotaExceeded:
+              value:
+                status: 429
+                code: QUOTA_EXCEEDED
+                message: "Maximum number of concurrent subscriptions reached"
+
+    Generic500:
+      description: Internal server error
+      headers:
+        x-correlator:
+          $ref: '#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 500
+            code: INTERNAL
+            message: "An unexpected error occurred"
