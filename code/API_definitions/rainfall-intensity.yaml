@@ -1,0 +1,1306 @@
+openapi: 3.0.3
+info:
+  title: Rainfall Intensity
+  description: |
+    The Rainfall Intensity API exposes link attenuation and network-derived rainfall estimation data to API consumers.
+    It leverages power measurements from commercial microwave links (CML) within a geographical
+    area to estimate rainfall intensity. Three capabilities are provided:
+
+    - **Link metadata**: retrieve metadata of microwave links in a geographical area (request/response)
+    - **Power measurements**: subscribe to real-time TX/RX power measurements per link (subscribe-notify)
+    - **Rainfall estimates**: subscribe to rainfall intensity estimates per GeoHash cell (subscribe-notify)
+
+    ## API scopes
+
+    This API processes only area-aggregated and infrastructure-level data. It contains no
+    personal data, so it is accessed using a 2-legged access token obtained from the
+    operator's token endpoint via the OAuth 2.0 Client Credentials grant (RFC 6749).
+
+    The following scopes are defined:
+    - `rainfall-intensity:links:read`: retrieve link metadata
+    - `rainfall-intensity:power-measurement-subscriptions:write`: create/delete power measurement subscriptions
+    - `rainfall-intensity:power-measurement-subscriptions:read`: list/retrieve power measurement subscriptions
+    - `rainfall-intensity:rainfall-subscriptions:write`: create/delete rainfall subscriptions
+    - `rainfall-intensity:rainfall-subscriptions:read`: list/retrieve rainfall subscriptions
+
+    <!-- CAMARA:MANDATORY:authorization-and-authentication:BEGIN -->
+
+    # Authorization and authentication
+
+    The "Camara Security and Interoperability Profile" provides details of how an API consumer requests an access token. Please refer to Identity and Consent Management (https://github.com/camaraproject/IdentityAndConsentManagement/) for the released version of the profile.
+
+    The specific authorization flows to be used will be agreed upon during the onboarding process, happening between the API consumer and the API provider, taking into account the declared purpose for accessing the API, whilst also being subject to the prevailing legal framework dictated by local legislation.
+
+    In cases where personal data is processed by the API and users can exercise their rights through mechanisms such as opt-in and/or opt-out, the use of three-legged access tokens is mandatory. This ensures that the API remains in compliance with privacy regulations, upholding the principles of transparency and user-centric privacy-by-design.
+    <!-- CAMARA:MANDATORY:authorization-and-authentication:END -->
+
+    <!-- CAMARA:MANDATORY:additional-error-responses:BEGIN -->
+
+    # Additional CAMARA error responses
+
+    The list of error codes in this API specification is not exhaustive. Therefore the API specification MAY not document some non-mandatory error statuses as indicated in `CAMARA API Design Guide`.
+
+    Please refer to the `CAMARA_common.yaml` of the Commonalities Release associated to this API version for a complete list of error responses. The applicable Commonalities Release can be identified from the `x-camara-commonalities` field, the changelog and the metadata of the released API version.
+
+    As a specific rule, error `501 - NOT_IMPLEMENTED` can be only a possible error response if it is explicitly documented in the API.
+    <!-- CAMARA:MANDATORY:additional-error-responses:END -->
+
+    <!-- CAMARA:MANDATORY:request-body-strictness:BEGIN -->
+
+    # Request body strictness
+
+    This API rejects requests with JSON request bodies that contain properties not declared in this specification, at any nesting level. Unknown properties result in a `400 INVALID_ARGUMENT` response.
+    <!-- CAMARA:MANDATORY:request-body-strictness:END -->
+
+  version: wip
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  x-camara-commonalities: 0.9.0
+
+externalDocs:
+  url: https://github.com/camaraproject/RainfallIntensity
+
+servers:
+  - url: "{apiRoot}/rainfall-intensity/vwip"
+    variables:
+      apiRoot:
+        default: https://example.com
+        description: API root as defined by the operator
+
+tags:
+  - name: Link Metadata
+    description: Retrieve metadata of microwave links in a geographical area
+  - name: Power Measurement Subscriptions
+    description: Subscribe to real-time TX/RX power measurements per link
+  - name: Rainfall Subscriptions
+    description: Subscribe to rainfall intensity estimates per GeoHash cell
+
+paths:
+
+  /links:
+    post:
+      operationId: retrieveLinks
+      summary: Retrieve microwave link metadata for a geographical area
+      description: |
+        Returns metadata for all active microwave links whose transmitter or receiver
+        is located within the specified geographical area (RFC 7946 Polygon).
+
+        Each link entry includes link ID, signal frequency, signal polarization,
+        and transmitter/receiver coordinates.
+      tags:
+        - Link Metadata
+      security:
+        - openId:
+            - rainfall-intensity:links:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMetadataRequest'
+      responses:
+        '200':
+          description: List of microwave links in the requested area
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMetadataResponse'
+        '400':
+          $ref: '#/components/responses/LinksBadRequest400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '422':
+          $ref: '#/components/responses/RainfallUnprocessable422'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+  /power-measurement-subscriptions:
+    post:
+      operationId: createPowerMeasurementSubscription
+      summary: Create a power measurement subscription
+      description: |
+        Subscribe to real-time TX/RX power measurements for microwave links within
+        a geographical area. Notifications are delivered to the specified callback URL.
+
+        Each notification contains measurements for all active links in the subscribed area.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:write
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HTTPPowerMeasurementSubscriptionRequest'
+      callbacks:
+        notifications:
+          "{$request.body#/sink}":
+            post:
+              operationId: postPowerMeasurementNotification
+              summary: Power measurement notification callback
+              description: |
+                Important: this endpoint is to be implemented by the API consumer.
+                The server calls it whenever a power measurement event occurs.
+              parameters:
+                - $ref: '#/components/parameters/x-correlator'
+              requestBody:
+                required: true
+                content:
+                  application/cloudevents+json:
+                    schema:
+                      $ref: '#/components/schemas/PowerMeasurementCallbackEvent'
+              responses:
+                '204':
+                  description: Successful notification
+                  headers:
+                    x-correlator:
+                      $ref: '#/components/headers/x-correlator'
+                '400':
+                  $ref: '#/components/responses/BadRequest400'
+                '401':
+                  $ref: '#/components/responses/Unauthenticated401'
+                '403':
+                  $ref: '#/components/responses/PermissionDenied403'
+                '410':
+                  $ref: '../common/CAMARA_event_common.yaml#/components/responses/SinkGone410'
+                '429':
+                  $ref: '#/components/responses/TooManyRequests429'
+              security:
+                - {}
+                - notificationsBearerAuth: []
+      responses:
+        '201':
+          description: Subscription created
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PowerMeasurementSubscription'
+        '202':
+          description: Request accepted to be processed. It applies for async creation process.
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionAsync'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/CreateSubscriptionBadRequest400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '409':
+          $ref: '#/components/responses/AlreadyExists409'
+        '422':
+          $ref: '#/components/responses/RainfallUnprocessable422'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+    get:
+      operationId: listPowerMeasurementSubscriptions
+      summary: List power measurement subscriptions
+      description: Returns all active power measurement subscriptions for the authenticated consumer.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+        - $ref: '../common/CAMARA_common.yaml#/components/parameters/page'
+        - $ref: '../common/CAMARA_common.yaml#/components/parameters/perPage'
+      responses:
+        '200':
+          description: List of subscriptions (may be empty)
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+            X-Total-Count:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/x-total-count'
+            X-Total-Pages:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/x-total-pages'
+            Link:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PowerMeasurementSubscriptionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+  /power-measurement-subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/x-correlator'
+
+    get:
+      operationId: getPowerMeasurementSubscription
+      summary: Retrieve a power measurement subscription
+      description: Returns the details of a specific power measurement subscription.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:read
+      responses:
+        '200':
+          description: Subscription details
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PowerMeasurementSubscription'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/SubscriptionIdRequired400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '404':
+          $ref: '#/components/responses/NotFound404'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+    delete:
+      operationId: deletePowerMeasurementSubscription
+      summary: Delete a power measurement subscription
+      description: Cancels a power measurement subscription. Notifications stop immediately.
+      tags:
+        - Power Measurement Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:power-measurement-subscriptions:write
+      responses:
+        '204':
+          description: Subscription deleted
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+        '202':
+          description: Request accepted to be processed. It applies for async deletion process.
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionAsync'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/SubscriptionIdRequired400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '404':
+          $ref: '#/components/responses/NotFound404'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+  /rainfall-subscriptions:
+    post:
+      operationId: createRainfallSubscription
+      summary: Create a rainfall estimate subscription
+      description: |
+        Subscribe to rainfall intensity estimates for a geographical area.
+        Notifications are delivered to the specified callback URL.
+
+        Each notification contains rainfall estimates per GeoHash cell covering the subscribed
+        area, along with a 90% confidence window (mm/h) and timestamp. The GeoHash precision
+        level is determined by the network based on link density in the area.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:write
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HTTPRainfallSubscriptionRequest'
+      callbacks:
+        notifications:
+          "{$request.body#/sink}":
+            post:
+              operationId: postRainfallNotification
+              summary: Rainfall notification callback
+              description: |
+                Important: this endpoint is to be implemented by the API consumer.
+                The server calls it whenever a rainfall estimate event occurs.
+              parameters:
+                - $ref: '#/components/parameters/x-correlator'
+              requestBody:
+                required: true
+                content:
+                  application/cloudevents+json:
+                    schema:
+                      $ref: '#/components/schemas/RainfallCallbackEvent'
+              responses:
+                '204':
+                  description: Successful notification
+                  headers:
+                    x-correlator:
+                      $ref: '#/components/headers/x-correlator'
+                '400':
+                  $ref: '#/components/responses/BadRequest400'
+                '401':
+                  $ref: '#/components/responses/Unauthenticated401'
+                '403':
+                  $ref: '#/components/responses/PermissionDenied403'
+                '410':
+                  $ref: '../common/CAMARA_event_common.yaml#/components/responses/SinkGone410'
+                '429':
+                  $ref: '#/components/responses/TooManyRequests429'
+              security:
+                - {}
+                - notificationsBearerAuth: []
+      responses:
+        '201':
+          description: Subscription created
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainfallSubscription'
+        '202':
+          description: Request accepted to be processed. It applies for async creation process.
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionAsync'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/CreateSubscriptionBadRequest400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '409':
+          $ref: '#/components/responses/AlreadyExists409'
+        '422':
+          $ref: '#/components/responses/RainfallUnprocessable422'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+    get:
+      operationId: listRainfallSubscriptions
+      summary: List rainfall subscriptions
+      description: Returns all active rainfall subscriptions for the authenticated consumer.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:read
+      parameters:
+        - $ref: '#/components/parameters/x-correlator'
+        - $ref: '../common/CAMARA_common.yaml#/components/parameters/page'
+        - $ref: '../common/CAMARA_common.yaml#/components/parameters/perPage'
+      responses:
+        '200':
+          description: List of subscriptions (may be empty)
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+            X-Total-Count:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/x-total-count'
+            X-Total-Pages:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/x-total-pages'
+            Link:
+              $ref: '../common/CAMARA_common.yaml#/components/headers/link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainfallSubscriptionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+  /rainfall-subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/x-correlator'
+
+    get:
+      operationId: getRainfallSubscription
+      summary: Retrieve a rainfall subscription
+      description: Returns the details of a specific rainfall subscription.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:read
+      responses:
+        '200':
+          description: Subscription details
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainfallSubscription'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/SubscriptionIdRequired400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '404':
+          $ref: '#/components/responses/NotFound404'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+    delete:
+      operationId: deleteRainfallSubscription
+      summary: Delete a rainfall subscription
+      description: Cancels a rainfall subscription. Notifications stop immediately.
+      tags:
+        - Rainfall Subscriptions
+      security:
+        - openId:
+            - rainfall-intensity:rainfall-subscriptions:write
+      responses:
+        '204':
+          description: Subscription deleted
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+        '202':
+          description: Request accepted to be processed. It applies for async deletion process.
+          headers:
+            x-correlator:
+              $ref: '#/components/headers/x-correlator'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionAsync'
+        '400':
+          $ref: '../common/CAMARA_event_common.yaml#/components/responses/SubscriptionIdRequired400'
+        '401':
+          $ref: '#/components/responses/Unauthenticated401'
+        '403':
+          $ref: '#/components/responses/PermissionDenied403'
+        '404':
+          $ref: '#/components/responses/NotFound404'
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+
+components:
+
+  securitySchemes:
+    openId:
+      $ref: '../common/CAMARA_common.yaml#/components/securitySchemes/openId'
+    notificationsBearerAuth:
+      $ref: '../common/CAMARA_event_common.yaml#/components/securitySchemes/notificationsBearerAuth'
+
+  parameters:
+    subscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      description: Subscription identifier that was obtained from the create event subscription operation.
+      schema:
+        $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
+    x-correlator:
+      $ref: '../common/CAMARA_common.yaml#/components/parameters/x-correlator'
+
+  headers:
+    x-correlator:
+      $ref: '../common/CAMARA_common.yaml#/components/headers/x-correlator'
+
+  schemas:
+
+    # --- Shared geographic types ---
+
+    Polygon:
+      type: object
+      description: |
+        A geographical area defined as a GeoJSON Polygon (RFC 7946 structure).
+        Only a single outer boundary ring is supported, holes are not allowed.
+        The ring must be closed (first and last coordinate identical).
+      required:
+        - type
+        - coordinates
+      properties:
+        type:
+          type: string
+          enum: [Polygon]
+          description: GeoJSON geometry type, must be "Polygon"
+        coordinates:
+          type: array
+          description: |
+            Array containing exactly one linear ring defining the outer boundary.
+            Each element is [longitude, latitude] in decimal degrees (WGS84).
+            The ring must be closed (first and last coordinate identical).
+            Holes are not supported.
+          minItems: 1
+          maxItems: 1
+          items:
+            type: array
+            minItems: 4
+            maxItems: 16
+            items:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items:
+                type: number
+                format: double
+
+    # --- Link metadata ---
+
+    LinkMetadataRequest:
+      type: object
+      description: Request body for retrieving link metadata. If area is omitted, all available link metadata is returned.
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    LinkMetadataResponse:
+      type: object
+      description: List of microwave links in the requested area.
+      required:
+        - links
+      properties:
+        links:
+          type: array
+          maxItems: 100000
+          description: Microwave links whose transmitter or receiver is within the requested area.
+          items:
+            $ref: '#/components/schemas/LinkMetadata'
+
+    LinkMetadata:
+      type: object
+      description: Metadata for a single microwave link.
+      required:
+        - linkId
+        - transmitterLocation
+        - receiverLocation
+        - lastUpdated
+      properties:
+        linkId:
+          type: string
+          maxLength: 64
+          description: Unique identifier for the microwave link (transmitter-receiver pair).
+        signalFrequencyKHz:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Signal frequency in kHz (e.g. 23000000 for 23 GHz).
+        signalPolarization:
+          type: string
+          enum: [H, V]
+          description: Signal polarization, H (horizontal) or V (vertical).
+        transmitterLocation:
+          $ref: '#/components/schemas/GeoCoordinate'
+        receiverLocation:
+          $ref: '#/components/schemas/GeoCoordinate'
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Timestamp of the last metadata update for this link (RFC 3339, UTC).
+
+    GeoCoordinate:
+      type: object
+      description: A geographic coordinate (WGS84).
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: Latitude in decimal degrees (WGS84).
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          description: Longitude in decimal degrees (WGS84).
+
+    # --- Power measurement subscription ---
+
+    PowerMeasurementSubscriptionRequest:
+      description: The request for creating a power measurement event subscription.
+      type: object
+      required:
+        - sink
+        - protocol
+        - config
+        - types
+      properties:
+        protocol:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/Protocol'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: ^https:\/\/.+$
+          description: The address to which events shall be delivered using the selected protocol.
+          example: "https://endpoint.example.com/sink"
+        sinkCredential:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SinkCredential'
+        types:
+          description: |
+            Event type eligible to be delivered by this subscription.
+            Only one event type per subscription is supported.
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/PowerMeasurementEventType'
+        config:
+          $ref: '#/components/schemas/PowerMeasurementConfigRequest'
+      discriminator:
+        propertyName: protocol
+        mapping:
+          HTTP: '#/components/schemas/HTTPPowerMeasurementSubscriptionRequest'
+
+    HTTPPowerMeasurementSubscriptionRequest:
+      description: Power measurement subscription request for HTTP-based event delivery.
+      allOf:
+        - $ref: '#/components/schemas/PowerMeasurementSubscriptionRequest'
+        - type: object
+          properties:
+            protocolSettings:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
+
+    PowerMeasurementSubscription:
+      description: Represents a power measurement subscription.
+      type: object
+      required:
+        - sink
+        - protocol
+        - config
+        - types
+        - id
+      properties:
+        protocol:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/Protocol'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: ^https:\/\/.+$
+          description: The address to which events shall be delivered using the selected protocol.
+          example: "https://endpoint.example.com/sink"
+        sinkCredential:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SinkCredential'
+        types:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/PowerMeasurementEventType'
+        config:
+          $ref: '#/components/schemas/PowerMeasurementConfigResponse'
+        id:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
+        startsAt:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/DateTime'
+        expiresAt:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/DateTime'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+      discriminator:
+        propertyName: protocol
+        mapping:
+          HTTP: '#/components/schemas/HTTPPowerMeasurementSubscriptionResponse'
+
+    HTTPPowerMeasurementSubscriptionResponse:
+      description: Power measurement subscription resource for HTTP-based event delivery.
+      allOf:
+        - $ref: '#/components/schemas/PowerMeasurementSubscription'
+        - type: object
+          properties:
+            protocolSettings:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
+
+    PowerMeasurementConfigRequest:
+      description: |
+        Configuration parameters for the power measurement subscription requested by the consumer.
+        Extends the common ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the
+        required, API-specific subscriptionDetail carrying the requested area.
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
+        - type: object
+          required:
+            - subscriptionDetail
+          properties:
+            subscriptionDetail:
+              $ref: '#/components/schemas/PowerMeasurementSubscriptionDetailRequest'
+
+    PowerMeasurementConfigResponse:
+      description: |
+        Configuration parameters granted by the implementation. subscriptionDetail echoes
+        the area actually granted for the subscription.
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
+        - type: object
+          required:
+            - subscriptionDetail
+          properties:
+            subscriptionDetail:
+              $ref: '#/components/schemas/PowerMeasurementSubscriptionDetailResponse'
+
+    PowerMeasurementSubscriptionDetailRequest:
+      description: The detail of the requested power measurement subscription.
+      type: object
+      required:
+        - area
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    PowerMeasurementSubscriptionDetailResponse:
+      description: The detail of the power measurement subscription granted by the implementation.
+      type: object
+      required:
+        - area
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    PowerMeasurementEventType:
+      type: string
+      description: Event type for power measurement notifications.
+      enum:
+        - org.camaraproject.rainfall-intensity.v0.power-measurement
+
+    # --- Power measurement notification payload ---
+
+    PowerMeasurementNotification:
+      type: object
+      description: |
+        Notification payload delivered to the consumer's sink URL.
+        Contains TX/RX power measurements for all active links in the subscribed area.
+      required:
+        - subscriptionId
+        - timestamp
+        - measurements
+      properties:
+        subscriptionId:
+          type: string
+          maxLength: 64
+          description: Identifier of the subscription that triggered this notification.
+        timestamp:
+          type: string
+          format: date-time
+          description: Measurement collection timestamp (RFC 3339, UTC).
+        measurements:
+          type: array
+          maxItems: 10000
+          description: Power measurements for each active link in the subscribed area.
+          items:
+            $ref: '#/components/schemas/LinkPowerMeasurement'
+
+    LinkPowerMeasurement:
+      type: object
+      description: TX/RX power measurement for a single microwave link.
+      required:
+        - linkId
+        - timestamp
+      properties:
+        linkId:
+          type: string
+          maxLength: 64
+          description: Unique identifier of the microwave link.
+        transmitPowerdBm:
+          type: number
+          format: double
+          nullable: true
+          description: Actual transmit power in dBm. Null if not available.
+        receivedPowerdBm:
+          type: number
+          format: double
+          nullable: true
+          description: Actual received power in dBm. Null if not available.
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of this individual measurement (RFC 3339, UTC).
+
+    # --- Rainfall subscription ---
+
+    RainfallSubscriptionRequest:
+      description: The request for creating a rainfall estimate event subscription.
+      type: object
+      required:
+        - sink
+        - protocol
+        - config
+        - types
+      properties:
+        protocol:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/Protocol'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: ^https:\/\/.+$
+          description: The address to which events shall be delivered using the selected protocol.
+          example: "https://endpoint.example.com/sink"
+        sinkCredential:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SinkCredential'
+        types:
+          description: |
+            Event type eligible to be delivered by this subscription.
+            Only one event type per subscription is supported.
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/RainfallEventType'
+        config:
+          $ref: '#/components/schemas/RainfallConfigRequest'
+      discriminator:
+        propertyName: protocol
+        mapping:
+          HTTP: '#/components/schemas/HTTPRainfallSubscriptionRequest'
+
+    HTTPRainfallSubscriptionRequest:
+      description: Rainfall subscription request for HTTP-based event delivery.
+      allOf:
+        - $ref: '#/components/schemas/RainfallSubscriptionRequest'
+        - type: object
+          properties:
+            protocolSettings:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
+
+    RainfallSubscription:
+      description: Represents a rainfall estimate subscription.
+      type: object
+      required:
+        - sink
+        - protocol
+        - config
+        - types
+        - id
+      properties:
+        protocol:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/Protocol'
+        sink:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: ^https:\/\/.+$
+          description: The address to which events shall be delivered using the selected protocol.
+          example: "https://endpoint.example.com/sink"
+        sinkCredential:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SinkCredential'
+        types:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/RainfallEventType'
+        config:
+          $ref: '#/components/schemas/RainfallConfigResponse'
+        id:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
+        startsAt:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/DateTime'
+        expiresAt:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/DateTime'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+      discriminator:
+        propertyName: protocol
+        mapping:
+          HTTP: '#/components/schemas/HTTPRainfallSubscriptionResponse'
+
+    HTTPRainfallSubscriptionResponse:
+      description: Rainfall subscription resource for HTTP-based event delivery.
+      allOf:
+        - $ref: '#/components/schemas/RainfallSubscription'
+        - type: object
+          properties:
+            protocolSettings:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
+
+    RainfallConfigRequest:
+      description: |
+        Configuration parameters for the rainfall subscription requested by the consumer.
+        Extends the common ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the
+        required, API-specific subscriptionDetail carrying the requested area.
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
+        - type: object
+          required:
+            - subscriptionDetail
+          properties:
+            subscriptionDetail:
+              $ref: '#/components/schemas/RainfallSubscriptionDetailRequest'
+
+    RainfallConfigResponse:
+      description: |
+        Configuration parameters granted by the implementation. subscriptionDetail echoes
+        the area actually granted for the subscription.
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
+        - type: object
+          required:
+            - subscriptionDetail
+          properties:
+            subscriptionDetail:
+              $ref: '#/components/schemas/RainfallSubscriptionDetailResponse'
+
+    RainfallSubscriptionDetailRequest:
+      description: The detail of the requested rainfall subscription.
+      type: object
+      required:
+        - area
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    RainfallSubscriptionDetailResponse:
+      description: The detail of the rainfall subscription granted by the implementation.
+      type: object
+      required:
+        - area
+      properties:
+        area:
+          $ref: '#/components/schemas/Polygon'
+
+    RainfallEventType:
+      type: string
+      description: Event type for rainfall estimate notifications.
+      enum:
+        - org.camaraproject.rainfall-intensity.v0.rainfall-estimate
+
+    # --- Rainfall notification payload ---
+
+    RainfallNotification:
+      type: object
+      description: |
+        Notification payload delivered to the consumer's sink URL.
+        Contains rainfall intensity estimates per GeoHash cell covering the subscribed area.
+      required:
+        - subscriptionId
+        - cells
+      properties:
+        subscriptionId:
+          type: string
+          maxLength: 64
+          description: Identifier of the subscription that triggered this notification.
+        cells:
+          type: array
+          maxItems: 10000
+          description: Rainfall estimates per GeoHash cell.
+          items:
+            $ref: '#/components/schemas/RainfallCell'
+
+    RainfallCell:
+      type: object
+      description: Rainfall intensity estimate for a single GeoHash cell.
+      required:
+        - geohash
+        - rainfallMmPerHour
+      properties:
+        geohash:
+          type: string
+          minLength: 5
+          maxLength: 6
+          description: |
+            GeoHash string identifying the cell at the requested precision level
+            (5 or 6 characters). Example: "u33db" (level 5), "u33db2" (level 6).
+        rainfallMmPerHour:
+          type: number
+          format: double
+          minimum: 0
+          description: Estimated rainfall intensity in mm/h for this cell.
+        accuracyMmPerHour:
+          type: number
+          format: double
+          minimum: 0
+          description: |
+            90% confidence window in mm/h. The true rainfall intensity lies within
+            +/- this value of the estimate with 90% probability.
+
+    # --- Shared subscription types ---
+
+    SubscriptionAsync:
+      description: Response for a subscription request managed asynchronously (creation or deletion).
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
+
+    PowerMeasurementSubscriptionList:
+      description: Paginated list of power measurement subscriptions.
+      type: object
+      required:
+        - subscriptions
+        - pagination
+      properties:
+        subscriptions:
+          type: array
+          minItems: 0
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PowerMeasurementSubscription'
+        pagination:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/Pagination'
+
+    RainfallSubscriptionList:
+      description: Paginated list of rainfall subscriptions.
+      type: object
+      required:
+        - subscriptions
+        - pagination
+      properties:
+        subscriptions:
+          type: array
+          minItems: 0
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/RainfallSubscription'
+        pagination:
+          $ref: '../common/CAMARA_common.yaml#/components/schemas/Pagination'
+
+    SubscriptionStatus:
+      type: string
+      enum:
+        - ACTIVATION_REQUESTED
+        - ACTIVE
+        - EXPIRED
+        - INACTIVE
+        - DELETED
+      description: |
+        Current status of the subscription.
+        - ACTIVATION_REQUESTED: creation triggered but not yet finished.
+        - ACTIVE: subscription is running and notifications are being delivered.
+        - INACTIVE: subscription temporarily inactive, workflow not deleted.
+        - EXPIRED: subscription ended (reached expiresAt or access token expired).
+        - DELETED: subscription ended as deleted; meta-information retained.
+
+    # --- Event model (CloudEvents) ---
+    # Each notification is a CloudEvent. The consumer routes on `type`:
+    # API-specific domain events carry the measurement/rainfall payload in `data`;
+    # subscription lifecycle events (started/updated/ended) are server-initiated
+    # and shared across both endpoints.
+
+    # Power measurement domain event group
+    PowerMeasurementNotificationEvent:
+      description: Power measurement domain event group (CloudEvents).
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/CloudEvent'
+        - type: object
+          properties:
+            type:
+              $ref: '#/components/schemas/PowerMeasurementEventType'
+      discriminator:
+        propertyName: type
+        mapping:
+          org.camaraproject.rainfall-intensity.v0.power-measurement: '#/components/schemas/EventPowerMeasurement'
+
+    EventPowerMeasurement:
+      description: Event carrying TX/RX power measurements for the subscribed area.
+      allOf:
+        - $ref: '#/components/schemas/PowerMeasurementNotificationEvent'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PowerMeasurementNotification'
+
+    # Rainfall domain event group
+    RainfallNotificationEvent:
+      description: Rainfall estimate domain event group (CloudEvents).
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/CloudEvent'
+        - type: object
+          properties:
+            type:
+              $ref: '#/components/schemas/RainfallEventType'
+      discriminator:
+        propertyName: type
+        mapping:
+          org.camaraproject.rainfall-intensity.v0.rainfall-estimate: '#/components/schemas/EventRainfallEstimate'
+
+    EventRainfallEstimate:
+      description: Event carrying rainfall intensity estimates per GeoHash cell.
+      allOf:
+        - $ref: '#/components/schemas/RainfallNotificationEvent'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/RainfallNotification'
+
+    # Subscription lifecycle event group (shared by both endpoints).
+    # Server-initiated; consumers cannot subscribe to these directly.
+    SubscriptionLifecycleEventType:
+      type: string
+      description: Subscription lifecycle event types managed by the server.
+      enum:
+        - org.camaraproject.rainfall-intensity.v0.subscription-started
+        - org.camaraproject.rainfall-intensity.v0.subscription-updated
+        - org.camaraproject.rainfall-intensity.v0.subscription-ended
+
+    SubscriptionLifecycleEvent:
+      description: Subscription lifecycle event group (CloudEvents).
+      allOf:
+        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/CloudEvent'
+        - type: object
+          properties:
+            type:
+              $ref: '#/components/schemas/SubscriptionLifecycleEventType'
+      discriminator:
+        propertyName: type
+        mapping:
+          org.camaraproject.rainfall-intensity.v0.subscription-started: '#/components/schemas/EventSubscriptionStarted'
+          org.camaraproject.rainfall-intensity.v0.subscription-updated: '#/components/schemas/EventSubscriptionUpdated'
+          org.camaraproject.rainfall-intensity.v0.subscription-ended: '#/components/schemas/EventSubscriptionEnded'
+
+    EventSubscriptionStarted:
+      description: Event signalling a subscription has started.
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionLifecycleEvent'
+        - type: object
+          properties:
+            data:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionStarted'
+
+    EventSubscriptionUpdated:
+      description: Event signalling a subscription has been updated.
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionLifecycleEvent'
+        - type: object
+          properties:
+            data:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionUpdated'
+
+    EventSubscriptionEnded:
+      description: Event signalling a subscription has ended.
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionLifecycleEvent'
+        - type: object
+          properties:
+            data:
+              $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionEnded'
+
+    # Callback unions: the set of events each endpoint's sink may receive.
+    PowerMeasurementCallbackEvent:
+      description: Union of events delivered to a power measurement subscription sink.
+      oneOf:
+        - $ref: '#/components/schemas/PowerMeasurementNotificationEvent'
+        - $ref: '#/components/schemas/SubscriptionLifecycleEvent'
+
+    RainfallCallbackEvent:
+      description: Union of events delivered to a rainfall subscription sink.
+      oneOf:
+        - $ref: '#/components/schemas/RainfallNotificationEvent'
+        - $ref: '#/components/schemas/SubscriptionLifecycleEvent'
+
+  responses:
+
+    # /links uses the range variant: area-related validation can return OUT_OF_RANGE.
+    LinksBadRequest400:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/BadRequestWithRange400'
+
+    # Plain 400 for subscription operations. Will be swapped to the event-specific
+    # CreateSubscriptionBadRequest400 (create) / SubscriptionIdRequired400 (get/delete)
+    # in Actions 3 and 7.
+    BadRequest400:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/BadRequest400'
+
+    Unauthenticated401:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/Unauthenticated401'
+
+    PermissionDenied403:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/PermissionDenied403'
+
+    NotFound404:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/NotFound404'
+
+    AlreadyExists409:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/AlreadyExists409'
+
+    TooManyRequests429:
+      $ref: '../common/CAMARA_common.yaml#/components/responses/TooManyRequests429'
+
+    # 500 is DEPRECATED as a shared response in Commonalities r4.4, defined locally.
+    InternalServerError500:
+      description: Internal server error
+      headers:
+        x-correlator:
+          $ref: '../common/CAMARA_common.yaml#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '../common/CAMARA_common.yaml#/components/schemas/ErrorInfo'
+              - type: object
+                properties:
+                  status:
+                    enum: [500]
+                  code:
+                    enum: [INTERNAL]
+          examples:
+            GENERIC_500_INTERNAL:
+              value:
+                status: 500
+                code: INTERNAL
+                message: Unknown server error. Typically a server bug.
+
+    # API-specific 422, kept local because it carries Rainfall Intensity error codes
+    # not present in the CAMARA generic 422. Uses the common ErrorInfo schema.
+    RainfallUnprocessable422:
+      description: Unprocessable, area not supported or insufficient link density
+      headers:
+        x-correlator:
+          $ref: '../common/CAMARA_common.yaml#/components/headers/x-correlator'
+      content:
+        application/json:
+          schema:
+            $ref: '../common/CAMARA_common.yaml#/components/schemas/ErrorInfo'
+          examples:
+            areaNotSupported:
+              value:
+                status: 422
+                code: RAINFALL_INTENSITY.AREA_NOT_SUPPORTED
+                message: "No active microwave links exist within the requested area"
+            insufficientLinkDensity:
+              value:
+                status: 422
+                code: RAINFALL_INTENSITY.INSUFFICIENT_LINK_DENSITY
+                message: "Too few links in the area for a reliable rainfall estimate"
