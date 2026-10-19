@@ -1,0 +1,12 @@
+# Rainfall Intensity API User Story — Raw Link Data for Storm Tracking
+
+| **Item** | **Details** |
+| ---- | ------- |
+| ***Summary*** | As an enterprise application developer at a weather service company, I want to subscribe to real-time microwave link power measurements and retrieve link metadata for a geographical area, so that I can compute path-integrated attenuation, improve storm tracking models, and issue faster severe weather warnings. |
+| ***Roles, Actors and Scope*** | **Roles:** Customer:Developer <br> **Actors:** Application service providers, weather service companies, hyperscalers, application developers. <br> **Scope:** Order To Activate (OTA) — Subscribe to link power measurements and retrieve link metadata for a defined geographical area. |
+| ***Pre-conditions*** | 1. The API consumer has been onboarded to the CSP's API platform. <br> 2. The API consumer has requested and received an access token with the required scope for the Rainfall Intensity API. |
+| ***Begins when*** | The API consumer makes a GET request to the metadata endpoint providing a geographical area (RFC 7946 Polygon) to retrieve the list of active microwave links and their properties (link ID, signal frequency, polarization, transmitter/receiver location). The consumer then makes a POST request to subscribe to power measurements for a geographical area, providing the area and a callback URL (sink) for receiving notifications. |
+| ***Ends when*** | The CSP delivers real-time TX/RX power measurement notifications to the consumer's callback URL for each measurement interval. The subscription ends when the consumer explicitly unsubscribes or the subscription expires. |
+| ***Post-conditions*** | The API consumer has a continuous stream of TX/RX power measurements per link, combined with link metadata (frequency, polarization, path geometry), enabling computation of path-integrated attenuation and derivation of rainfall intensity estimates for storm tracking and early warning systems. |
+| ***Exceptions*** | - **Unauthorized:** Invalid or expired access token. <br> - **Invalid input:** Malformed polygon, unsupported area format, or missing required parameters. <br> - **Area not supported:** No active microwave links exist within the requested geographical area. <br> - **Callback unreachable:** The provided sink URL is not reachable by the CSP notification service. <br> - **Subscription limit exceeded:** The consumer has reached the maximum number of concurrent subscriptions. |
+
