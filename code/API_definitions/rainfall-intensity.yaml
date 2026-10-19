@@ -144,6 +144,25 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/HTTPPowerMeasurementSubscriptionRequest'
+            examples:
+              REQUEST_POWER_SUBSCRIPTION:
+                description: Subscribe to power measurements for an area.
+                value:
+                  protocol: "HTTP"
+                  sink: https://weatherco.example.com/sinks/power
+                  types:
+                    - org.camaraproject.rainfall-intensity.v0.power-measurement
+                  config:
+                    subscriptionDetail:
+                      area:
+                        type: Polygon
+                        coordinates:
+                          - - [4.86, 45.75]
+                            - [4.87, 45.75]
+                            - [4.87, 45.76]
+                            - [4.86, 45.76]
+                            - [4.86, 45.75]
+                    subscriptionExpireTime: "2026-12-31T23:59:59Z"
       callbacks:
         notifications:
           "{$request.body#/sink}":
@@ -161,6 +180,39 @@ paths:
                   application/cloudevents+json:
                     schema:
                       $ref: '#/components/schemas/PowerMeasurementCallbackEvent'
+                    examples:
+                      POWER_MEASUREMENT:
+                        summary: Power measurement notification
+                        value:
+                          id: evt-9a12b7c4
+                          source: https://operator.example.com/rainfall-intensity
+                          specversion: "1.0"
+                          type: org.camaraproject.rainfall-intensity.v0.power-measurement
+                          time: "2026-10-13T16:00:00Z"
+                          datacontenttype: application/json
+                          data:
+                            subscriptionId: sub-456
+                            measurements:
+                              - linkId: link-0012
+                                transmitPowerdBm: 18.0
+                                receivedPowerdBm: -42.5
+                                timestamp: "2026-10-13T16:00:00Z"
+                              - linkId: link-0013
+                                transmitPowerdBm: 20.0
+                                receivedPowerdBm: -47.1
+                                timestamp: "2026-10-13T16:00:00Z"
+                      SUBSCRIPTION_ENDED:
+                        summary: Subscription lifecycle event (ended)
+                        value:
+                          id: evt-9a12b7ff
+                          source: https://operator.example.com/rainfall-intensity
+                          specversion: "1.0"
+                          type: org.camaraproject.rainfall-intensity.v0.subscription-ended
+                          time: "2026-10-13T18:00:00Z"
+                          datacontenttype: application/json
+                          data:
+                            subscriptionId: sub-456
+                            terminationReason: SUBSCRIPTION_EXPIRED
               responses:
                 '204':
                   description: Successful notification
@@ -243,6 +295,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PowerMeasurementSubscriptionList'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
         '401':
           $ref: '#/components/responses/Unauthenticated401'
         '403':
@@ -344,6 +398,25 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/HTTPRainfallSubscriptionRequest'
+            examples:
+              REQUEST_RAINFALL_SUBSCRIPTION:
+                description: Subscribe to rainfall estimates for an area.
+                value:
+                  protocol: "HTTP"
+                  sink: https://weatherco.example.com/sinks/rainfall
+                  types:
+                    - org.camaraproject.rainfall-intensity.v0.rainfall-estimate
+                  config:
+                    subscriptionDetail:
+                      area:
+                        type: Polygon
+                        coordinates:
+                          - - [4.86, 45.75]
+                            - [4.87, 45.75]
+                            - [4.87, 45.76]
+                            - [4.86, 45.76]
+                            - [4.86, 45.75]
+                    subscriptionExpireTime: "2026-12-31T23:59:59Z"
       callbacks:
         notifications:
           "{$request.body#/sink}":
@@ -361,6 +434,37 @@ paths:
                   application/cloudevents+json:
                     schema:
                       $ref: '#/components/schemas/RainfallCallbackEvent'
+                    examples:
+                      RAINFALL_ESTIMATE:
+                        summary: Rainfall estimate notification
+                        value:
+                          id: evt-7f3a9c21
+                          source: https://operator.example.com/rainfall-intensity
+                          specversion: "1.0"
+                          type: org.camaraproject.rainfall-intensity.v0.rainfall-estimate
+                          time: "2026-10-13T16:00:00Z"
+                          datacontenttype: application/json
+                          data:
+                            subscriptionId: sub-123
+                            cells:
+                              - geohash: u33db2
+                                rainfallMmPerHour: 4.5
+                                accuracyMmPerHour: 0.8
+                              - geohash: u33db3
+                                rainfallMmPerHour: 2.1
+                                accuracyMmPerHour: 0.6
+                      SUBSCRIPTION_ENDED:
+                        summary: Subscription lifecycle event (ended)
+                        value:
+                          id: evt-7f3a9c99
+                          source: https://operator.example.com/rainfall-intensity
+                          specversion: "1.0"
+                          type: org.camaraproject.rainfall-intensity.v0.subscription-ended
+                          time: "2026-10-13T18:00:00Z"
+                          datacontenttype: application/json
+                          data:
+                            subscriptionId: sub-123
+                            terminationReason: SUBSCRIPTION_EXPIRED
               responses:
                 '204':
                   description: Successful notification
@@ -443,6 +547,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RainfallSubscriptionList'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
         '401':
           $ref: '#/components/responses/Unauthenticated401'
         '403':
@@ -549,6 +655,7 @@ components:
 
     Polygon:
       type: object
+      additionalProperties: false
       description: |
         A geographical area defined as a GeoJSON Polygon (RFC 7946 structure).
         Only a single outer boundary ring is supported, holes are not allowed.
@@ -586,10 +693,16 @@ components:
 
     LinkMetadataRequest:
       type: object
-      description: Request body for retrieving link metadata. If area is omitted, all available link metadata is returned.
+      additionalProperties: false
+      description: Request body for retrieving link metadata.
       properties:
         area:
-          $ref: '#/components/schemas/Polygon'
+          description: |
+            Area to query, as an RFC 7946 Polygon. Optional: if omitted, the response
+            covers all links available to the consumer, as determined by the consumer's
+            authorization and operator policy.
+          allOf:
+            - $ref: '#/components/schemas/Polygon'
 
     LinkMetadataResponse:
       type: object
@@ -611,7 +724,6 @@ components:
         - linkId
         - transmitterLocation
         - receiverLocation
-        - lastUpdated
       properties:
         linkId:
           type: string
@@ -687,7 +799,7 @@ components:
           items:
             $ref: '#/components/schemas/PowerMeasurementEventType'
         config:
-          $ref: '#/components/schemas/PowerMeasurementConfigRequest'
+          $ref: '#/components/schemas/PowerMeasurementConfig'
       discriminator:
         propertyName: protocol
         mapping:
@@ -730,7 +842,7 @@ components:
           items:
             $ref: '#/components/schemas/PowerMeasurementEventType'
         config:
-          $ref: '#/components/schemas/PowerMeasurementConfigResponse'
+          $ref: '#/components/schemas/PowerMeasurementConfig'
         id:
           $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
         startsAt:
@@ -753,11 +865,11 @@ components:
             protocolSettings:
               $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
 
-    PowerMeasurementConfigRequest:
+    PowerMeasurementConfig:
       description: |
-        Configuration parameters for the power measurement subscription requested by the consumer.
-        Extends the common ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the
-        required, API-specific subscriptionDetail carrying the requested area.
+        Implementation-specific configuration for the subscription. Extends the common
+        ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the required,
+        API-specific subscriptionDetail carrying the subscribed area.
       allOf:
         - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
         - type: object
@@ -765,38 +877,20 @@ components:
             - subscriptionDetail
           properties:
             subscriptionDetail:
-              $ref: '#/components/schemas/PowerMeasurementSubscriptionDetailRequest'
+              $ref: '#/components/schemas/PowerMeasurementSubscriptionDetail'
 
-    PowerMeasurementConfigResponse:
-      description: |
-        Configuration parameters granted by the implementation. subscriptionDetail echoes
-        the area actually granted for the subscription.
-      allOf:
-        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
-        - type: object
-          required:
-            - subscriptionDetail
-          properties:
-            subscriptionDetail:
-              $ref: '#/components/schemas/PowerMeasurementSubscriptionDetailResponse'
-
-    PowerMeasurementSubscriptionDetailRequest:
-      description: The detail of the requested power measurement subscription.
+    PowerMeasurementSubscriptionDetail:
+      description: The area the subscription covers (as provided by the consumer).
       type: object
-      required:
-        - area
+      additionalProperties: false
       properties:
         area:
-          $ref: '#/components/schemas/Polygon'
-
-    PowerMeasurementSubscriptionDetailResponse:
-      description: The detail of the power measurement subscription granted by the implementation.
-      type: object
-      required:
-        - area
-      properties:
-        area:
-          $ref: '#/components/schemas/Polygon'
+          description: |
+            Area to monitor, as an RFC 7946 Polygon. Optional: if omitted, the
+            subscription covers all links available to the consumer, as determined
+            by the consumer's authorization and operator policy.
+          allOf:
+            - $ref: '#/components/schemas/Polygon'
 
     PowerMeasurementEventType:
       type: string
@@ -813,17 +907,12 @@ components:
         Contains TX/RX power measurements for all active links in the subscribed area.
       required:
         - subscriptionId
-        - timestamp
         - measurements
       properties:
         subscriptionId:
           type: string
           maxLength: 64
           description: Identifier of the subscription that triggered this notification.
-        timestamp:
-          type: string
-          format: date-time
-          description: Measurement collection timestamp (RFC 3339, UTC).
         measurements:
           type: array
           maxItems: 10000
@@ -837,6 +926,8 @@ components:
       required:
         - linkId
         - timestamp
+        - transmitPowerdBm
+        - receivedPowerdBm
       properties:
         linkId:
           type: string
@@ -846,12 +937,12 @@ components:
           type: number
           format: double
           nullable: true
-          description: Actual transmit power in dBm. Null if not available.
+          description: Actual transmit power in dBm. Always present; null when no reading is available for this link.
         receivedPowerdBm:
           type: number
           format: double
           nullable: true
-          description: Actual received power in dBm. Null if not available.
+          description: Actual received power in dBm. Always present; null when no reading is available for this link.
         timestamp:
           type: string
           format: date-time
@@ -889,7 +980,7 @@ components:
           items:
             $ref: '#/components/schemas/RainfallEventType'
         config:
-          $ref: '#/components/schemas/RainfallConfigRequest'
+          $ref: '#/components/schemas/RainfallConfig'
       discriminator:
         propertyName: protocol
         mapping:
@@ -932,7 +1023,7 @@ components:
           items:
             $ref: '#/components/schemas/RainfallEventType'
         config:
-          $ref: '#/components/schemas/RainfallConfigResponse'
+          $ref: '#/components/schemas/RainfallConfig'
         id:
           $ref: '../common/CAMARA_event_common.yaml#/components/schemas/SubscriptionId'
         startsAt:
@@ -955,11 +1046,11 @@ components:
             protocolSettings:
               $ref: '../common/CAMARA_event_common.yaml#/components/schemas/HTTPSettings'
 
-    RainfallConfigRequest:
+    RainfallConfig:
       description: |
-        Configuration parameters for the rainfall subscription requested by the consumer.
-        Extends the common ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the
-        required, API-specific subscriptionDetail carrying the requested area.
+        Implementation-specific configuration for the subscription. Extends the common
+        ConfigBase (subscriptionExpireTime, subscriptionMaxEvents) with the required,
+        API-specific subscriptionDetail carrying the subscribed area.
       allOf:
         - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
         - type: object
@@ -967,38 +1058,20 @@ components:
             - subscriptionDetail
           properties:
             subscriptionDetail:
-              $ref: '#/components/schemas/RainfallSubscriptionDetailRequest'
+              $ref: '#/components/schemas/RainfallSubscriptionDetail'
 
-    RainfallConfigResponse:
-      description: |
-        Configuration parameters granted by the implementation. subscriptionDetail echoes
-        the area actually granted for the subscription.
-      allOf:
-        - $ref: '../common/CAMARA_event_common.yaml#/components/schemas/ConfigBase'
-        - type: object
-          required:
-            - subscriptionDetail
-          properties:
-            subscriptionDetail:
-              $ref: '#/components/schemas/RainfallSubscriptionDetailResponse'
-
-    RainfallSubscriptionDetailRequest:
-      description: The detail of the requested rainfall subscription.
+    RainfallSubscriptionDetail:
+      description: The area the subscription covers (as provided by the consumer).
       type: object
-      required:
-        - area
+      additionalProperties: false
       properties:
         area:
-          $ref: '#/components/schemas/Polygon'
-
-    RainfallSubscriptionDetailResponse:
-      description: The detail of the rainfall subscription granted by the implementation.
-      type: object
-      required:
-        - area
-      properties:
-        area:
-          $ref: '#/components/schemas/Polygon'
+          description: |
+            Area to monitor, as an RFC 7946 Polygon. Optional: if omitted, the
+            subscription covers all cells available to the consumer, as determined
+            by the consumer's authorization and operator policy.
+          allOf:
+            - $ref: '#/components/schemas/Polygon'
 
     RainfallEventType:
       type: string
@@ -1046,7 +1119,7 @@ components:
           type: number
           format: double
           minimum: 0
-          description: Estimated rainfall intensity in mm/h for this cell.
+          description: Estimated instantaneous rainfall intensity in mm/h for this cell.
         accuracyMmPerHour:
           type: number
           format: double
